@@ -5,7 +5,7 @@ using System.Text.Json;
 
 var builder = new ConfigurationBuilder()
     .SetBasePath(AppContext.BaseDirectory)
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+    .AddJsonFile("appsettings.Development.json", optional: false, reloadOnChange: true);
 
 var settings = builder.Build()
     .GetSection("Settings")
@@ -13,49 +13,27 @@ var settings = builder.Build()
 
 var variablesResponse = await new AzureDevOpsApi(settings.LinkApi, settings.UserAuthentication).GetLibraries();
 
+var variableGroupService = new VariableGroupService(settings);
+
+// ============================
+
 var variableGroups = JsonSerializer.Deserialize<List<VariableGroup>>(variablesResponse);
 
-if (variableGroups is null)
+var searchGroupName = AnsiConsole.Prompt(new TextPrompt<string>("[blue]What's your group?[/]")
+    .DefaultValue(settings.DefaultGroup));
+
+var variableGroupFound = variableGroups.Where(x => x.Name.Contains(searchGroupName))
+    .ToList();
+
+variableGroupService.WriteVariableGroups(variableGroupFound);
+
+if (!variableGroupFound.Any())
 {
-    Console.WriteLine("Não encontramos nada!");
     return;
 }
 
-var findGroup = AnsiConsole.Ask<string>("[blue]What's your group?[/]");
-
-var variableGroupFinded = variableGroups.Where(x => x.Name.Contains(findGroup))
-    .ToList();
-
 AnsiConsole.MarkupLine("");
 
-AnsiConsole.MarkupLine("[grey] Grupos encontrados:[/]");
+var searchKey = AnsiConsole.Ask<string>("[blue]What variable are you looking for?[/]");
 
-foreach (var variableGroup in variableGroupFinded)
-{
-    AnsiConsole.MarkupLine("[grey] - {0} ({1})[/]", variableGroup.Name, settings.GetLinkLibrary(variableGroup.Id));
-}
-
-AnsiConsole.MarkupLine("");
-
-var findVariable = AnsiConsole.Ask<string>("[blue]What variable are you looking for?[/]");
-AnsiConsole.MarkupLine("");
-
-
-foreach (var variableGroup in variableGroupFinded)
-{
-    var keys = variableGroup.Variables.Keys.Where(x => x.Contains(findVariable));
-
-    if (!keys.Any())
-    {
-        continue;
-    }
-
-    AnsiConsole.MarkupLine("[red]Name: {0}[/] - ({1})", variableGroup.Name, settings.GetLinkLibrary(variableGroup.Id));
-
-    foreach (var key in keys)
-    {
-        AnsiConsole.MarkupLine(" - {0}: [grey]{1}[/]", key, variableGroup.Variables[key].Value);
-    }
-
-    AnsiConsole.MarkupLine("");
-}
+variableGroupService.WriteVariables(variableGroupFound, searchKey);
