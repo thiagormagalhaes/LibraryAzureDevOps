@@ -4,7 +4,7 @@ namespace LibraryAzureDevOps;
 
 public class VariableGroupService
 {
-    private Settings _settings;
+    private readonly Settings _settings;
 
     public VariableGroupService(Settings settings)
     {
@@ -13,22 +13,16 @@ public class VariableGroupService
 
     public void WriteVariableGroups(List<VariableGroup> variableGroups)
     {
-        AnsiConsole.MarkupLine("");
+        AddEmptyLine();
 
         if (!variableGroups.Any())
         {
             AnsiConsole.Write("Empty");
-
-            AnsiConsole.MarkupLine("");
-
+            AddEmptyLine();
             return;
         }
 
-        var table = new Table();
-        table.Border(TableBorder.Ascii);
-
-        table.AddColumn("Name").Centered();
-        table.AddColumn("Link");
+        var table = CreateTable("Name", "Link");
 
         foreach (var variableGroup in variableGroups)
         {
@@ -37,30 +31,30 @@ public class VariableGroupService
         }
 
         AnsiConsole.Write(table);
-
-        AnsiConsole.MarkupLine("");
+        AddEmptyLine();
     }
 
     public void WriteVariables(List<VariableGroup> variableGroups, string searchKey)
+    {
+        AddEmptyLine();
+
+        WriteVariablesByVariable(variableGroups, searchKey);
+        //WriteVariablesByGroup(variableGroups, searchKey);
+
+        AddEmptyLine();
+    }
+
+    private void WriteVariablesByGroup(List<VariableGroup> variableGroups, string searchKey)
     {
         foreach (var variableGroup in variableGroups)
         {
             var keys = variableGroup.Variables.Keys.Where(x => x.Contains(searchKey));
 
-            if (!keys.Any())
-            {
-                continue;
-            }
+            if (!keys.Any()) continue;
 
-            AnsiConsole.MarkupLine("");
+            AnsiConsole.MarkupLine($"[red]Name: {variableGroup.Name}[/] ({_settings.GetLinkLibrary(variableGroup.Id)})");
 
-            AnsiConsole.MarkupLine("[red]Name: {0}[/] ({1})", variableGroup.Name, _settings.GetLinkLibrary(variableGroup.Id));
-
-            var table = new Table();
-            table.Border(TableBorder.Ascii);
-
-            table.AddColumn("Key").Centered();
-            table.AddColumn("Value");
+            var table = CreateTable("Key", "Value");
 
             foreach (var key in keys)
             {
@@ -69,8 +63,57 @@ public class VariableGroupService
             }
 
             AnsiConsole.Write(table);
-
-            AnsiConsole.MarkupLine("");
+            AddEmptyLine();
         }
+    }
+
+    private void WriteVariablesByVariable(List<VariableGroup> variableGroups, string searchKey)
+    {
+        var variables = new Dictionary<string, Dictionary<string, string>>();
+
+        foreach (var variableGroup in variableGroups)
+        {
+            var keys = variableGroup.Variables.Keys.Where(x => x.Contains(searchKey));
+
+            if (!keys.Any()) continue;
+
+            foreach (var key in keys)
+            {
+                if (!variables.ContainsKey(key))
+                {
+                    variables[key] = new Dictionary<string, string>();
+                }
+                variables[key][variableGroup.Name] = variableGroup.Variables[key].Value ?? "*** secret ***";
+            }
+        }
+
+        foreach (var variable in variables)
+        {
+            AnsiConsole.MarkupLine($"[red]Name: {variable.Key}[/]");
+
+            var table = CreateTable("Group", "Value");
+
+            foreach (var values in variable.Value)
+            {
+                table.AddRow(values.Key, values.Value);
+                table.AddEmptyRow();
+            }
+
+            AnsiConsole.Write(table);
+            AddEmptyLine();
+        }
+    }
+
+    private void AddEmptyLine()
+    {
+        AnsiConsole.MarkupLine("");
+    }
+
+    private Table CreateTable(string column1, string column2)
+    {
+        var table = new Table().Border(TableBorder.Ascii);
+        table.AddColumn(column1).Centered();
+        table.AddColumn(column2);
+        return table;
     }
 }

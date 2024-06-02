@@ -3,37 +3,62 @@ using Microsoft.Extensions.Configuration;
 using Spectre.Console;
 using System.Text.Json;
 
-var builder = new ConfigurationBuilder()
-    .SetBasePath(AppContext.BaseDirectory)
-    .AddJsonFile("appsettings.Development.json", optional: false, reloadOnChange: true);
-
-var settings = builder.Build()
-    .GetSection("Settings")
-    .Get<Settings>()!;
-
-var variablesResponse = await new AzureDevOpsApi(settings.LinkApi, settings.UserAuthentication).GetLibraries();
-
-var variableGroupService = new VariableGroupService(settings);
-
-// ============================
-
-var variableGroups = JsonSerializer.Deserialize<List<VariableGroup>>(variablesResponse);
-
-var searchGroupName = AnsiConsole.Prompt(new TextPrompt<string>("[blue]What's your group?[/]")
-    .DefaultValue(settings.DefaultGroup));
-
-var variableGroupFound = variableGroups.Where(x => x.Name.Contains(searchGroupName))
-    .ToList();
-
-variableGroupService.WriteVariableGroups(variableGroupFound);
-
-if (!variableGroupFound.Any())
+static async Task Main(string[] args)
 {
-    return;
+    var settings = LoadSettings();
+    var variablesResponse = await FetchVariablesResponseAsync(settings);
+
+    var variableGroups = DeserializeVariableGroups(variablesResponse);
+    var variableGroupService = new VariableGroupService(settings);
+
+    var searchGroupName = PromptForGroupName(settings);
+    var variableGroupFound = FilterVariableGroups(variableGroups, searchGroupName);
+
+    variableGroupService.WriteVariableGroups(variableGroupFound);
+
+    if (variableGroupFound.Any())
+    {
+        var searchKey = AnsiConsole.Ask<string>("[blue]What variable are you looking for?[/]");
+        variableGroupService.WriteVariables(variableGroupFound, searchKey);
+    }
 }
 
-AnsiConsole.MarkupLine("");
+static Settings LoadSettings()
+{
+    var builder = new ConfigurationBuilder()
+        .SetBasePath(AppContext.BaseDirectory)
+        .AddJsonFile("appsettings.Development.json", optional: false, reloadOnChange: true);
 
-var searchKey = AnsiConsole.Ask<string>("[blue]What variable are you looking for?[/]");
+    return builder.Build()
+        .GetSection("Settings")
+        .Get<Settings>()!;
+}
 
-variableGroupService.WriteVariables(variableGroupFound, searchKey);
+static async Task<string> FetchVariablesResponseAsync(Settings settings)
+{
+    var api = new AzureDevOpsApi(settings.LinkApi, settings.UserAuthentication);
+    return await api.GetLibraries();
+}
+
+static List<VariableGroup> DeserializeVariableGroups(string variablesResponse)
+{
+    return JsonSerializer.Deserialize<List<VariableGroup>>(variablesResponse)
+        ?? new List<VariableGroup>();
+}
+
+static string PromptForGroupName(Settings settings)
+{
+    return AnsiConsole.Prompt(
+        new TextPrompt<string>("[blue]What's your group?[/]")
+            .DefaultValue(settings.DefaultGroup)
+    );
+}
+
+static List<VariableGroup> FilterVariableGroups(List<VariableGroup> variableGroups, string searchGroupName)
+{
+    return variableGroups
+        .Where(x => x.Name.Contains(searchGroupName, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+}
+
+await Main(args);
