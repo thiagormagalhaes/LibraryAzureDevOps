@@ -1,53 +1,48 @@
-﻿using System.Net;
+﻿using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 
 namespace LibraryAzureDevOps;
 
-public class AzureDevOpsApi
+public class AzureDevOpsApi(Settings settings)
 {
-    private Uri _linkApi;
-    private CookieContainer _cookieContainer = new();
-    private HttpClientHandler _httpClientHandler = new();
+    private readonly Uri _linkApi = new(
+        $"https://dev.azure.com/{settings.Organization}/{settings.Project}/_apis/distributedtask/variablegroups?api-version={settings.ApiVersion}&groupName=*");
 
-    public AzureDevOpsApi(string linkApi, string userAuthentication)
+    private readonly HttpClient _client = new();
+    private readonly string _accessToken = ConvertToBase64(settings.PersonalAccessTokens);
+
+    private static string ConvertToBase64(string personalAccessToken)
     {
-        _linkApi = new Uri(linkApi);
-
-        _cookieContainer.Add(_linkApi, new Cookie("UserAuthentication", userAuthentication));
-        
-        _httpClientHandler = new HttpClientHandler
-        {
-            CookieContainer = _cookieContainer
-        };
+        var plainTextBytes = Encoding.UTF8.GetBytes($":{personalAccessToken}");
+        return Convert.ToBase64String(plainTextBytes);
     }
 
     public async Task<string> GetLibraries()
     {
-        using (HttpClient client = new HttpClient(_httpClientHandler))
+        try
         {
-            try
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", $" {_accessToken}");
+
+            HttpResponseMessage response = await _client.GetAsync(_linkApi);
+
+            response.EnsureSuccessStatusCode();
+
+            string responseBody = await response.Content.ReadAsStringAsync();
+
+            using (JsonDocument document = JsonDocument.Parse(responseBody))
             {
-                HttpResponseMessage response = await client.GetAsync(_linkApi);
+                JsonElement root = document.RootElement;
 
-                response.EnsureSuccessStatusCode();
+                var values = root.GetProperty("value");
 
-                string responseBody = await response.Content.ReadAsStringAsync();
-
-                using (JsonDocument document = JsonDocument.Parse(responseBody))
-                {
-
-                    JsonElement root = document.RootElement;
-
-                    var values = root.GetProperty("value");
-
-                    return values.ToString();
-                }
+                return values.ToString();
             }
-            catch (HttpRequestException e)
-            {
-                Console.WriteLine("Ocorreu um erro na requisição: " + e.Message);
-                return string.Empty;
-            }
+        }
+        catch (HttpRequestException e)
+        {
+            Console.WriteLine("Ocorreu um erro na requisição: " + e.Message);
+            return string.Empty;
         }
     }
 }

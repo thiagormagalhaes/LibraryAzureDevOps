@@ -2,15 +2,8 @@
 
 namespace LibraryAzureDevOps;
 
-public class VariableGroupService
+public class VariableGroupService(Settings settings)
 {
-    private readonly Settings _settings;
-
-    public VariableGroupService(Settings settings)
-    {
-        _settings = settings;
-    }
-
     public void WriteVariableGroups(List<VariableGroup> variableGroups)
     {
         AddEmptyLine();
@@ -26,7 +19,7 @@ public class VariableGroupService
 
         foreach (var variableGroup in variableGroups)
         {
-            table.AddRow(variableGroup.Name, _settings.GetLinkLibrary(variableGroup.Id));
+            table.AddRow(variableGroup.Name, settings.GetLinkLibrary(variableGroup.Id));
             table.AddEmptyRow();
         }
 
@@ -52,7 +45,7 @@ public class VariableGroupService
 
             if (!keys.Any()) continue;
 
-            AnsiConsole.MarkupLine($"[red]Name: {variableGroup.Name}[/] ({_settings.GetLinkLibrary(variableGroup.Id)})");
+            AnsiConsole.MarkupLine($"[red]Name: {variableGroup.Name}[/] ({settings.GetLinkLibrary(variableGroup.Id)})");
 
             var table = CreateTable("Key", "Value");
 
@@ -83,6 +76,7 @@ public class VariableGroupService
                 {
                     variables[key] = new Dictionary<string, string>();
                 }
+
                 variables[key][variableGroup.Name] = variableGroup.Variables[key].Value ?? "*** secret ***";
             }
         }
@@ -95,7 +89,7 @@ public class VariableGroupService
 
             foreach (var values in variable.Value)
             {
-                table.AddRow(values.Key, values.Value);
+                table.AddRow(values.Key, Markup.Escape(values.Value));
                 table.AddEmptyRow();
             }
 

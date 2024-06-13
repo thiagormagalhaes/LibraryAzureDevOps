@@ -1,7 +1,10 @@
-﻿using LibraryAzureDevOps;
+﻿using System.Text.Json;
+using LibraryAzureDevOps;
 using Microsoft.Extensions.Configuration;
 using Spectre.Console;
-using System.Text.Json;
+
+await Main(args);
+return;
 
 static async Task Main(string[] args)
 {
@@ -36,14 +39,14 @@ static Settings LoadSettings()
 
 static async Task<string> FetchVariablesResponseAsync(Settings settings)
 {
-    var api = new AzureDevOpsApi(settings.LinkApi, settings.UserAuthentication);
+    var api = new AzureDevOpsApi(settings);
     return await api.GetLibraries();
 }
 
 static List<VariableGroup> DeserializeVariableGroups(string variablesResponse)
 {
     return JsonSerializer.Deserialize<List<VariableGroup>>(variablesResponse)
-        ?? new List<VariableGroup>();
+           ?? new List<VariableGroup>();
 }
 
 static string PromptForGroupName(Settings settings)
@@ -60,5 +63,3 @@ static List<VariableGroup> FilterVariableGroups(List<VariableGroup> variableGrou
         .Where(x => x.Name.Contains(searchGroupName, StringComparison.OrdinalIgnoreCase))
         .ToList();
 }
-
-await Main(args);
